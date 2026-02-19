@@ -1,19 +1,45 @@
 // ═══════════════════════════════════════════
-// bot.js — Telegram Bot для ASCEND Mini App
+// bot.js — Telegram Bot ASCEND (RU)
 // ═══════════════════════════════════════════
 const { Telegraf, Markup } = require("telegraf");
 const { db } = require("./db");
 
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const MINI_APP_URL = process.env.MINI_APP_URL; // https://your-vercel-app.vercel.app
+const BOT_TOKEN  = process.env.BOT_TOKEN;
+const MINI_APP_URL = process.env.MINI_APP_URL;
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// ── /start ──────────────────────────────────
+const STAGE_RU = {
+  "Novice":        "Новичок",
+  "Apprentice":    "Ученик",
+  "Intermediate":  "Середняк",
+  "Advanced":      "Продвинутый",
+  "Expert":        "Эксперт",
+  "Master":        "Мастер",
+};
+
+const STAT_RU = {
+  appearance: "Внешность",
+  discipline: "Дисциплина",
+  social:     "Общение",
+  mental:     "Ментальное",
+  physical:   "Физическое",
+  financial:  "Финансы",
+};
+
+const STAT_ICONS = {
+  appearance: "✦",
+  discipline: "⚔",
+  social:     "◈",
+  mental:     "◉",
+  physical:   "◆",
+  financial:  "◎",
+};
+
+// ── /start ───────────────────────────────────
 bot.start(async (ctx) => {
   const tgUser = ctx.from;
 
-  // Регистрируем / находим юзера
   let user = await db.getUserByTgId(tgUser.id);
   if (!user) {
     user = await db.createUser({
@@ -22,63 +48,117 @@ bot.start(async (ctx) => {
       first_name:   tgUser.first_name,
       display_name: tgUser.first_name,
     });
-    console.log(`[NEW USER] ${tgUser.id} — ${tgUser.first_name}`);
+    console.log(`[НОВЫЙ ИГРОК] ${tgUser.id} — ${tgUser.first_name}`);
   }
 
-  await ctx.replyWithPhoto(
-    { url: "https://i.imgur.com/PLACEHOLDER.png" }, // заменить на свой баннер
-    {
-      caption: `*⬡ ASCEND — Level Up Your Real Life ⬡*\n\nПривет, ${tgUser.first_name}!\n\nЭто RPG‑трекер саморазвития прямо в Telegram.\n\n✦ Прокачивай 6 навыков\n⚔ Выполняй ежедневные задания\n◆ Смотри свой ранг среди друзей\n\nТвой уровень: *${user.current_stage || "Novice"}*`,
-      parse_mode: "Markdown",
-      ...Markup.inlineKeyboard([
-        [Markup.button.webApp("⬡ Открыть ASCEND", MINI_APP_URL)],
-        [Markup.button.callback("📊 Моя статистика", "my_stats")],
-        [Markup.button.callback("🏆 Топ игроков", "leaderboard")],
-      ])
-    }
+  const stageRu = STAGE_RU[user.current_stage] || user.current_stage;
+
+  const text = [
+    `⬡ *ASCEND — Прокачай себя* ⬡`,
+    ``,
+    `Привет, *${tgUser.first_name}*! 👋`,
+    ``,
+    `RPG‑трекер саморазвития прямо в Telegram.`,
+    `Превращай реальные действия в очки опыта.`,
+    ``,
+    `✦ Прокачивай 6 навыков`,
+    `⚔ Выполняй ежедневные задания`,
+    `◆ Соревнуйся с другими игроками`,
+    `🔥 Не ломай стрик`,
+    ``,
+    `Твой ранг: *${stageRu}*`,
+    `Дней в игре: *${user.streak_days}*`,
+  ].join("\n");
+
+  await ctx.replyWithMarkdown(text,
+    Markup.inlineKeyboard([
+      [Markup.button.webApp("⚔ Открыть ASCEND", MINI_APP_URL)],
+      [
+        Markup.button.callback("📊 Мои статы", "my_stats"),
+        Markup.button.callback("🏆 Рейтинг", "leaderboard"),
+      ],
+      [Markup.button.callback("❓ Помощь", "help")],
+    ])
   );
 });
 
-// ── Команды ──────────────────────────────────
-bot.command("stats", async (ctx) => {
+// ── /статы ───────────────────────────────────
+bot.command(["stats", "статы"], async (ctx) => {
   const user = await db.getUserByTgId(ctx.from.id);
-  if (!user) return ctx.reply("Сначала запусти бота: /start");
+  if (!user) return ctx.replyWithMarkdown("Сначала запусти бота: /start");
 
-  const stats = user.stats;
-  const total = Object.values(stats).reduce((a, b) => a + b, 0).toFixed(1);
+  const stats   = user.stats;
+  const total   = Object.values(stats).reduce((a, b) => a + b, 0).toFixed(1);
+  const stageRu = STAGE_RU[user.current_stage] || user.current_stage;
 
   const lines = [
-    `*📊 Твои статы, ${user.display_name}*`,
-    `Уровень: *${user.current_stage}*`,
-    `Всего очков: *${total}*`,
-    "",
-    `✦ Appearance:  ${stats.appearance.toFixed(1)}`,
-    `⚔ Discipline:  ${stats.discipline.toFixed(1)}`,
-    `◈ Social:      ${stats.social.toFixed(1)}`,
-    `◉ Mental:      ${stats.mental.toFixed(1)}`,
-    `◆ Physical:    ${stats.physical.toFixed(1)}`,
-    `◎ Financial:   ${stats.financial.toFixed(1)}`,
-    "",
+    `📊 *Статистика — ${user.display_name}*`,
+    ``,
+    `Ранг: *${stageRu}*`,
+    `Счёт: *${total} / 60*`,
     `🔥 Стрик: *${user.streak_days} дней*`,
+    ``,
+    `*Навыки:*`,
+    ...Object.entries(stats).map(([key, val]) =>
+      `${STAT_ICONS[key]} ${STAT_RU[key]}: *${Number(val).toFixed(1)}*`
+    ),
   ];
 
   await ctx.replyWithMarkdown(lines.join("\n"),
-    Markup.inlineKeyboard([[Markup.button.webApp("⬡ Открыть приложение", MINI_APP_URL)]])
+    Markup.inlineKeyboard([
+      [Markup.button.webApp("⚔ Открыть ASCEND", MINI_APP_URL)]
+    ])
   );
 });
 
-bot.command("top", async (ctx) => {
+// ── /топ ─────────────────────────────────────
+bot.command(["top", "топ"], async (ctx) => {
   const leaders = await db.getLeaderboard(10);
-  const lines = ["*🏆 Топ игроков ASCEND*", ""];
+  const lines   = ["🏆 *Топ игроков ASCEND*", ""];
 
   leaders.forEach((u, i) => {
-    const medals = ["🥇","🥈","🥉"];
-    const prefix = medals[i] || `${i+1}.`;
-    const total = Object.values(u.stats).reduce((a,b)=>a+b,0).toFixed(1);
-    lines.push(`${prefix} *${u.display_name}* — ${total} (${u.current_stage})`);
+    const medals  = ["🥇", "🥈", "🥉"];
+    const prefix  = medals[i] || `${i + 1}.`;
+    const total   = Object.values(u.stats).reduce((a, b) => a + b, 0).toFixed(1);
+    const stageRu = STAGE_RU[u.current_stage] || u.current_stage;
+    lines.push(`${prefix} *${u.display_name}* — ${total} _(${stageRu})_`);
   });
 
+  if (leaders.length === 0) lines.push("_Пока никого нет. Будь первым!_");
+
   await ctx.replyWithMarkdown(lines.join("\n"));
+});
+
+// ── /помощь ───────────────────────────────────
+bot.command(["help", "помощь"], async (ctx) => {
+  const text = [
+    `❓ *Помощь — ASCEND*`,
+    ``,
+    `*Команды:*`,
+    `/start — главное меню`,
+    `/статы — твои навыки`,
+    `/топ — рейтинг игроков`,
+    `/помощь — эта подсказка`,
+    ``,
+    `*Как играть:*`,
+    `Каждый день доступны задания по 6 навыкам.`,
+    `Выполняй → получай XP → растёт уровень.`,
+    `Не пропускай дни — стрик важен.`,
+    ``,
+    `*Навыки:*`,
+    `✦ Внешность — уход за собой`,
+    `⚔ Дисциплина — привычки и режим`,
+    `◈ Общение — социальные навыки`,
+    `◉ Ментальное — ум и психика`,
+    `◆ Физическое — спорт и тело`,
+    `◎ Финансы — деньги и инвестиции`,
+  ].join("\n");
+
+  await ctx.replyWithMarkdown(text,
+    Markup.inlineKeyboard([
+      [Markup.button.webApp("⚔ Открыть ASCEND", MINI_APP_URL)]
+    ])
+  );
 });
 
 // ── Callback кнопки ──────────────────────────
@@ -86,27 +166,71 @@ bot.action("my_stats", async (ctx) => {
   await ctx.answerCbQuery();
   const user = await db.getUserByTgId(ctx.from.id);
   if (!user) return ctx.reply("Сначала /start");
-  const total = Object.values(user.stats).reduce((a,b)=>a+b,0).toFixed(1);
-  await ctx.replyWithMarkdown(`Твой уровень: *${user.current_stage}*\nВсего очков: *${total}*\n\nОткрой приложение для деталей 👇`,
-    Markup.inlineKeyboard([[Markup.button.webApp("⬡ Открыть ASCEND", MINI_APP_URL)]])
+
+  const total   = Object.values(user.stats).reduce((a, b) => a + b, 0).toFixed(1);
+  const stageRu = STAGE_RU[user.current_stage] || user.current_stage;
+
+  await ctx.replyWithMarkdown(
+    `📊 Ранг: *${stageRu}*\nСчёт: *${total} / 60*\n🔥 Стрик: *${user.streak_days} дней*`,
+    Markup.inlineKeyboard([
+      [Markup.button.webApp("⚔ Открыть ASCEND", MINI_APP_URL)]
+    ])
   );
 });
 
 bot.action("leaderboard", async (ctx) => {
   await ctx.answerCbQuery();
   const leaders = await db.getLeaderboard(5);
-  const lines = leaders.map((u, i) => {
-    const total = Object.values(u.stats).reduce((a,b)=>a+b,0).toFixed(1);
-    return `${i+1}. ${u.display_name} — ${total}`;
+  const lines   = ["🏆 *Топ-5 игроков:*", ""];
+
+  leaders.forEach((u, i) => {
+    const medals = ["🥇", "🥈", "🥉"];
+    const prefix = medals[i] || `${i + 1}.`;
+    const total  = Object.values(u.stats).reduce((a, b) => a + b, 0).toFixed(1);
+    lines.push(`${prefix} ${u.display_name} — ${total}`);
   });
-  await ctx.replyWithMarkdown("*🏆 Топ-5:*\n\n" + lines.join("\n"));
+
+  if (leaders.length === 0) lines.push("_Пока никого нет_");
+
+  await ctx.replyWithMarkdown(lines.join("\n"),
+    Markup.inlineKeyboard([
+      [Markup.button.webApp("⚔ Открыть ASCEND", MINI_APP_URL)]
+    ])
+  );
 });
 
-// ── Настройка меню ────────────────────────────
+bot.action("help", async (ctx) => {
+  await ctx.answerCbQuery();
+  await ctx.reply(
+    "Выполняй задания каждый день → прокачивай навыки → поднимайся в рейтинге.\n\nКоманды: /статы /топ /помощь",
+    Markup.inlineKeyboard([
+      [Markup.button.webApp("⚔ Открыть ASCEND", MINI_APP_URL)]
+    ])
+  );
+});
+
+// ── Уведомление о level-up ────────────────────
+bot.notifyLevelUp = async (tgId, newStage) => {
+  const stageRu = STAGE_RU[newStage] || newStage;
+  try {
+    await bot.telegram.sendMessage(tgId,
+      `🎉 *НОВЫЙ УРОВЕНЬ!*\n\nТы достиг ранга *${stageRu}*!\n\nТак держать 💪`,
+      {
+        parse_mode: "Markdown",
+        ...Markup.inlineKeyboard([
+          [Markup.button.webApp("⚔ Открыть ASCEND", MINI_APP_URL)]
+        ])
+      }
+    );
+  } catch {}
+};
+
+// ── Меню команд в боте ───────────────────────
 bot.telegram.setMyCommands([
-  { command: "start",  description: "🚀 Запустить ASCEND" },
-  { command: "stats",  description: "📊 Мои статы" },
-  { command: "top",    description: "🏆 Топ игроков" },
+  { command: "start",  description: "🚀 Главное меню" },
+  { command: "статы",  description: "📊 Мои навыки и прогресс" },
+  { command: "топ",    description: "🏆 Рейтинг игроков" },
+  { command: "помощь", description: "❓ Как играть" },
 ]);
 
 module.exports = { bot };

@@ -6,7 +6,7 @@ const { db } = require("./db");
 
 const BOT_TOKEN    = process.env.BOT_TOKEN;
 const MINI_APP_URL = process.env.MINI_APP_URL;
-const CHANNEL_URL  = "https://t.me/ascend_app"; // ← ЗАМЕНИ на свой канал
+const CHANNEL_URL  = "https://t.me/ascend_selfdev"; // ← ЗАМЕНИ на свой канал
 
 const bot = new Telegraf(BOT_TOKEN);
 
